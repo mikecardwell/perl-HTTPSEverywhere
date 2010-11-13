@@ -30,7 +30,7 @@ EXAMPLES
       );
       my $url = $he->convert('http://gmail.com/foo');
 
-      In this example, "$url" would contain "https://mail.google.com/foo"
+      In this example, $url would contain https://mail.google.com/foo
 
 METHODS
     new( rulesets = \@paths ))>

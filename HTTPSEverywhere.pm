@@ -188,7 +188,7 @@ latest ruleset format.
   );
   my $url = $he->convert('http://gmail.com/foo');
 
-  In this example, "$url" would contain "https://mail.google.com/foo"
+  In this example, $url would contain https://mail.google.com/foo
 
 =head1 METHODS
 
