@@ -46,15 +46,11 @@ sub convert {
              $match_target = 0;
 
              next unless int(@$target) == int(@$host_split);
-             my( $test, $maxn ) = ( 0, int(@$target)-1 );
-             for my $n ( 0..$maxn ){
+             for( my $n = int(@$target)-1; $n >= 0; --$n ){
                 last unless $target->[$n] eq $host_split->[$n] || $target->[$n] eq '*';
-                $test = 1 if $n == $maxn;
+                $match_target = 1 if $n == 0;
              }
-             if( $test ){
-                $match_target = 1;
-                last;
-             }
+             last if $match_target;
           }
           next unless $match_target;
 
