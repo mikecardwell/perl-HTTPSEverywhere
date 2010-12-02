@@ -26,7 +26,7 @@ $|=1;
 
 my $base = '/etc/squid/https-everywhere/git/https-everywhere';
 
-my $he      = new HTTPSEverywhere( rulesets => ["$base/pending-rules","$base/src/chrome/content/rules"] );    
+my $he      = new HTTPSEverywhere( rulesets => ["$base/src/chrome/content/rules"] );    
 my $updated = time;
 
 while(<>){  

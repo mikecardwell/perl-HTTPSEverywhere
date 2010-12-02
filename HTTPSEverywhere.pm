@@ -178,7 +178,6 @@ latest ruleset format.
 
   my $he = new HTTPSEverywhere(
      rulesets => [
-        '/git/https-everywhere/pending-rules',
         '/git/https-everywhere/src/chrome/content/rules',
      ],
   );
