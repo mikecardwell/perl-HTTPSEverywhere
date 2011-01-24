@@ -218,7 +218,7 @@ http://www.opensource.org/licenses/gpl-2.0.php
 
 =head1 AUTHOR
 
-Mike Cardwell - https://secure.grepular.com/ 
+Mike Cardwell - https://grepular.com/ 
 
 Copyright (C) 2010  Mike Cardwell
 
