@@ -19,6 +19,7 @@ sub new {
 
    my $self = bless {
       paths => $paths,
+      enable_default_off_rulesets => $args{enable_default_off_rulesets} ? 1 : 0,
    }, $class;
 
    $self->read();
@@ -53,6 +54,9 @@ sub convert {
              last if $match_target;
           }
           next unless $match_target;
+
+        ## If we haven't parsed out the exclusions/rules yet, do so now
+	  $self->_full_parse( $name ) unless exists $self->{ruleset}{$name}{rules};
 
         ## <exclusion/>
           my $exclude = 0;
@@ -93,6 +97,10 @@ sub read {
    $self->_read($_) foreach @paths;
 }
 
+## Reads in all of the rulesets. Uses pattern matching rather than LibXML
+#  for performance reasons and only pulls out the name, target and default_off
+#  values. _full_parse handles the rest, the first time a target is matched.
+#
 sub _read {
    my( $self, $path ) = @_;
 
@@ -103,44 +111,67 @@ sub _read {
       my $file = $_;
       next unless $file =~ /\.xml$/;
 
-      my $doc = XML::LibXML->load_xml( location => "$path/$file" ) or die $!;
-      my $xml = $doc->documentElement;
+      ## Read the raw file
+        my $raw;
+        {
+           open my $in, '<', "$path/$file" or die $!;
+           local $/ = undef;
+           $raw = <$in>;
+           close $in;
+        }
 
-      if( $xml->nodeName eq 'ruleset' ){
-         next if $xml->getAttribute('default_off')||'';
+      ## Parse out the ruleset name and default_off values
+        my( $name, $default_off );
+	{
+           my( $ruleset ) = $raw =~ /<ruleset\s+([^>]+?)[\s\/]*>/s;
+	   my %attr;
+	   $ruleset =~ s/\s*([^\s"]+)\s*=\s*"([^"]+)"\s*/$attr{lc($1)}=$2/eg;
+           $name = $attr{'name'};
+	   $default_off = $attr{'default_off'};
+        }
+        next if defined $default_off && !$self->{enable_default_off_rulesets};
 
-         my $name = $xml->getAttribute('name')||'';
+      ## Parse out the targets
+        my @targets;
+	{
+	   my $buf = $raw;
+           $buf =~ s/<target\s[^>]*?host="([^"]+)"/push @targets,lc($1)/eg;
+	   @targets = map { [split(/\./,$_)] } @targets;
+	}
 
-         my @targets;
-         foreach my $target ( $xml->findnodes('/ruleset/target') ){
-            push @targets, [split(/\./,lc($target->getAttribute('host')))];
-         }
-
-         my @exclusions;
-         foreach my $exclusion ( $xml->findnodes('/ruleset/exclusion') ){
-            my $pattern = $exclusion->getAttribute('pattern');
-            push @exclusions, qr{$pattern}i;
-         }
-
-         my @rules;
-         foreach my $rule ( $xml->findnodes('/ruleset/rule') ){
-            my $from = $rule->getAttribute('from');
-            push @rules, {
-               from => qr{$from}i,
-               to   => $rule->getAttribute('to'),
-            };
-         }
-
-         $self->{ruleset}{$name} = {
-            targets     => \@targets,
-            exclusions  => \@exclusions,
-            rules       => \@rules,
-         };
-      } else {
-         die "Invalid XML in $path/$file\n";
-      }
+      ##
+        $self->{ruleset}{$name} = {
+           path        => "$path/$file",
+           targets     => \@targets,
+        };
    }
    closedir $dir;
+}
+
+sub _full_parse {
+   my( $self, $name ) = @_;
+
+   my $doc = XML::LibXML->load_xml( location => $self->{ruleset}{$name}{path} ) or die $!;
+   my $xml = $doc->documentElement;
+
+   my @exclusions;
+   foreach my $exclusion ( $xml->findnodes('/ruleset/exclusion') ){
+      my $pattern = $exclusion->getAttribute('pattern');
+      push @exclusions, qr{$pattern}i;
+   }
+
+   my @rules;
+   foreach my $rule ( $xml->findnodes('/ruleset/rule') ){
+      my $from = $rule->getAttribute('from');
+      push @rules, {
+         from => qr{$from}i,
+         to   => $rule->getAttribute('to'),
+      };
+   }
+
+   $self->{ruleset}{$name}{exclusions} = \@exclusions;
+   $self->{ruleset}{$name}{rules}      = \@rules;
+   delete $self->{ruleset}{$name}{path}; # Purely to save memory
 }
 
 1;
@@ -189,10 +220,14 @@ latest ruleset format.
 
 =over
 
-=item B<new( rulesets => \@paths ))>
+=item B<new( rulesets => \@paths, enable_default_off_rulesets => 0 ))>
 
   "rulesets" contains a list of paths to the directory or directories
   containing the xml ruleset files
+
+  "enable_default_off_rulesets" turns on the rulesets which are marked
+  as "default_off". It takes a true/false (1/0) value. By default it
+  is disabled.
 
 =item B<read( @paths )>
 
