@@ -76,7 +76,7 @@ sub convert {
 
                 my $n = 0;
                 foreach my $bit ( @match ){
-                   ++$n; next unless defined $bit;
+                   ++$n; $bit = "" unless defined $bit;
                    $newurl =~ s/\$$n/$bit/gsm;
                 }
 
