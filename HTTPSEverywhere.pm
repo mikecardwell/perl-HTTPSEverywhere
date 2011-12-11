@@ -39,11 +39,11 @@ sub convert {
      my $host_split = [split(/\./,$host)];
 
    ## Traverse each ruleset
-     foreach my $name ( sort keys %{$self->{ruleset}} ){
+     foreach my $path ( sort keys %{$self->{ruleset}} ){
 
         ## <target/>
           my $match_target = 1;
-          foreach my $target (  @{$self->{ruleset}{$name}{targets}} ){
+          foreach my $target (  @{$self->{ruleset}{$path}{t}} ){
              $match_target = 0;
 
              next unless int(@$target) == int(@$host_split);
@@ -56,11 +56,11 @@ sub convert {
           next unless $match_target;
 
         ## If we haven't parsed out the exclusions/rules yet, do so now
-	  $self->_full_parse( $name ) unless exists $self->{ruleset}{$name}{rules};
+	  $self->_full_parse( $path ) unless exists $self->{ruleset}{$path}{rules};
 
         ## <exclusion/>
           my $exclude = 0;
-          foreach my $exclusion ( @{$self->{ruleset}{$name}{exclusions}} ){
+          foreach my $exclusion ( @{$self->{ruleset}{$path}{x}} ){
              if( $newurl =~ $exclusion ){
                 $exclude = 1;
                 last;
@@ -69,7 +69,7 @@ sub convert {
           next if $exclude;
 
         ## <rule/>
-          foreach my $rule ( @{$self->{ruleset}{$name}{rules}} ){
+          foreach my $rule ( @{$self->{ruleset}{$path}{rules}} ){
              my @match = $newurl =~ $rule->{from};
              if( @match ){
                 $newurl =~ s/$rule->{from}/$rule->{to}/;
@@ -93,8 +93,13 @@ sub read {
    my $self = shift;
    my @paths = int(@_) ? @_ : @{$self->{paths}};
 
-   $self->{ruleset} = {};
+   $self->{ruleset}{$_}{check}=1 foreach keys %{$self->{ruleset}};
+
    $self->_read($_) foreach @paths;
+
+   foreach( keys %{$self->{ruleset}} ){
+      delete $self->{ruleset}{$_} if $self->{ruleset}{$_}{check};
+   }
 }
 
 ## Reads in all of the rulesets. Uses pattern matching rather than LibXML
@@ -110,6 +115,13 @@ sub _read {
    foreach( readdir $dir ){
       my $file = $_;
       next unless $file =~ /\.xml$/;
+
+      ## Last modified time of the ruleset
+        my $mtime = (stat("$path/$file"))[9];
+        if( exists $self->{ruleset}{"$path/$file"}{m} && $mtime == $self->{ruleset}{"$path/$file"}{m} ){
+           delete $self->{ruleset}{"$path/$file"}{check};
+           next;
+        }
 
       ## Read the raw file
         my $raw;
@@ -139,19 +151,19 @@ sub _read {
 	   @targets = map { [split(/\./,$_)] } @targets;
 	}
 
-      ##
-        $self->{ruleset}{$name} = {
-           path        => "$path/$file",
-           targets     => \@targets,
+      ## Add/update the ruleset in memory
+        $self->{ruleset}{"$path/$file"} = {
+           t => \@targets,
+	   m => $mtime,
         };
    }
    closedir $dir;
 }
 
 sub _full_parse {
-   my( $self, $name ) = @_;
+   my( $self, $path ) = @_;
 
-   my $doc = XML::LibXML->load_xml( location => $self->{ruleset}{$name}{path} ) or die $!;
+   my $doc = XML::LibXML->load_xml( location => $path ) or die $!;
    my $xml = $doc->documentElement;
 
    my @exclusions;
@@ -169,9 +181,8 @@ sub _full_parse {
       };
    }
 
-   $self->{ruleset}{$name}{exclusions} = \@exclusions;
-   $self->{ruleset}{$name}{rules}      = \@rules;
-   delete $self->{ruleset}{$name}{path}; # Purely to save memory
+   $self->{ruleset}{$path}{x}     = \@exclusions;
+   $self->{ruleset}{$path}{rules} = \@rules;
 }
 
 1;
